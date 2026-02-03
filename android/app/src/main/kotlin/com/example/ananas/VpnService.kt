@@ -146,22 +146,20 @@ class VpnService : AndroidVpnService() {
             dnsServers.put("8.8.8.8")
             
             val googleDns = org.json.JSONObject()
-            googleDns.put("address", "https://dns.google/dns-query") 
+            googleDns.put("address", "https://8.8.8.8/dns-query") 
             googleDns.put("domains", org.json.JSONArray().put("geosite:google").put("geosite:telegram"))
             dnsServers.put(googleDns)
             
             dns.put("servers", dnsServers)
             json.put("dns", dns)
 
-            // ۳. تنظیم اینباندها (SOCKS5 و HTTP)
+            // ۳. تنظیم اینباند SOCKS5
             val sniffing = org.json.JSONObject()
             sniffing.put("enabled", true)
             sniffing.put("destOverride", org.json.JSONArray().put("http").put("tls").put("quic").put("fakedns"))
             sniffing.put("metadataOnly", false)
 
             val newInbounds = org.json.JSONArray()
-            
-            // اینباند SOCKS5
             val socksInbound = org.json.JSONObject()
             socksInbound.put("tag", "socks-in")
             socksInbound.put("protocol", "socks")
@@ -170,15 +168,6 @@ class VpnService : AndroidVpnService() {
             socksInbound.put("sniffing", sniffing)
             socksInbound.put("settings", org.json.JSONObject().put("udp", true).put("auth", "noauth"))
             newInbounds.put(socksInbound)
-
-            // اینباند HTTP (برای پروکسی سیستم)
-            val httpInbound = org.json.JSONObject()
-            httpInbound.put("tag", "http-in")
-            httpInbound.put("protocol", "http")
-            httpInbound.put("listen", "127.0.0.1")
-            httpInbound.put("port", 10809)
-            httpInbound.put("sniffing", sniffing)
-            newInbounds.put(httpInbound)
 
             json.put("inbounds", newInbounds)
             
@@ -197,29 +186,16 @@ class VpnService : AndroidVpnService() {
             dnsRule.put("outboundTag", "dns-out")
             newRules.put(dnsRule)
             
-            // قانون تلگرام (Domain & IP)
+            // قانون تلگرام با تگ صحیح
             val telegramRule = org.json.JSONObject()
             telegramRule.put("type", "field")
             telegramRule.put("outboundTag", proxyTag)
             telegramRule.put("domain", org.json.JSONArray().put("geosite:telegram"))
-            telegramRule.put("ip", org.json.JSONArray().put("geoip:telegram"))
             newRules.put(telegramRule)
-
-            // قانون سایت‌های داخلی (Direct)
-            val directRule = org.json.JSONObject()
-            directRule.put("type", "field")
-            directRule.put("outboundTag", "direct")
-            directRule.put("domain", org.json.JSONArray().put("geosite:ir").put("geosite:private"))
-            directRule.put("ip", org.json.JSONArray().put("geoip:ir").put("geoip:private"))
-            newRules.put(directRule)
             
             // اضافه کردن بقیه قوانین اصلی
             for (i in 0 until rules.length()) {
                 val rule = rules.getJSONObject(i)
-                // جلوگیری از تکرار قوانینی که خودمان اضافه کردیم
-                val domain = rule.optJSONArray("domain")?.toString() ?: ""
-                if (domain.contains("geosite:telegram") || domain.contains("geosite:private")) continue
-                
                 // اگر قانون قبلی برای UDP بود، تگش را اصلاح می‌کنیم
                 if (rule.optString("network") == "udp") {
                     rule.put("outboundTag", proxyTag)
@@ -287,7 +263,7 @@ class VpnService : AndroidVpnService() {
             
             // پل SOCKS5 در سطح سیستم (برای TCP)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                builder.setHttpProxy(ProxyInfo.buildDirectProxy("127.0.0.1", 10809))
+                builder.setHttpProxy(ProxyInfo.buildDirectProxy("127.0.0.1", 10808))
             }
 
             vpnInterface = builder.establish()
