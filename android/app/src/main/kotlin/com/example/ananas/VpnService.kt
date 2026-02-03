@@ -17,6 +17,9 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
 import java.io.OutputStream
+import java.io.BufferedReader
+import java.io.InterruptedIOException
+import java.io.IOException
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.nio.ByteBuffer
@@ -237,10 +240,19 @@ class VpnService : AndroidVpnService() {
             process = pb.start()
 
             Thread {
-                val reader = process?.inputStream?.bufferedReader()
-                while (isRunning) {
-                    val line = reader?.readLine() ?: break
-                    Log.d("AnanasXrayLog", line)
+                var reader: BufferedReader? = null
+                try {
+                    reader = process?.inputStream?.bufferedReader()
+                    while (isRunning) {
+                        val line = reader?.readLine() ?: break
+                        Log.d("AnanasXrayLog", line)
+                    }
+                } catch (e: InterruptedIOException) {
+                    Log.d("AnanasVPN", "Xray process reader interrupted, likely during shutdown.")
+                } catch (e: IOException) {
+                    Log.e("AnanasVPN", "IOException while reading Xray process output: ${e.message}")
+                } finally {
+                    reader?.close()
                 }
             }.start()
         } catch (e: Exception) {
