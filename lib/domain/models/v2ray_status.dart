@@ -3,12 +3,14 @@ class V2RayStatus {
   final int uploadSpeed;
   final int downloadSpeed;
   final String state;
+  final int? delay;
 
   V2RayStatus({
     required this.duration,
     required this.uploadSpeed,
     required this.downloadSpeed,
     required this.state,
+    this.delay,
   });
 
   factory V2RayStatus.disconnected() {
@@ -17,6 +19,7 @@ class V2RayStatus {
       uploadSpeed: 0,
       downloadSpeed: 0,
       state: 'DISCONNECTED',
+      delay: null,
     );
   }
 
@@ -26,6 +29,7 @@ class V2RayStatus {
       uploadSpeed: map['uploadSpeed'] ?? 0,
       downloadSpeed: map['downloadSpeed'] ?? 0,
       state: map['state'] ?? 'DISCONNECTED',
+      delay: map['delay'],
     );
   }
 }

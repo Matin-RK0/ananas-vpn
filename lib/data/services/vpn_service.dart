@@ -30,9 +30,13 @@ class VpnService {
 
   Future<void> startVpn(VpnConfig config) async {
     try {
-      final convertedConfig = XrayConfigConverter.convertToFullJson(config.config);
+      // Use the pre-converted fullJsonConfig or convert the rawLink
+      final configJson = config.fullJsonConfig.isNotEmpty 
+          ? config.fullJsonConfig 
+          : XrayConfigConverter.convertToFullJson(config.rawLink);
+          
       await _channel.invokeMethod('startVpn', {
-        'config': convertedConfig,
+        'config': configJson,
         'remark': config.remark.isNotEmpty ? config.remark : config.name,
       });
     } on PlatformException catch (e) {
@@ -49,12 +53,20 @@ class VpnService {
   }
 
   Future<int> getConnectedServerDelay() async {
-    // Implement ping logic via method channel if needed
-    return 0; 
+    try {
+      final int delay = await _channel.invokeMethod('getConnectedServerDelay');
+      return delay;
+    } catch (e) {
+      return -1;
+    }
   }
 
   Future<int> getServerDelay(String config) async {
-     // Implement ping logic via method channel if needed
-    return 0;
+    try {
+      final int delay = await _channel.invokeMethod('getServerDelay', {'config': config});
+      return delay;
+    } catch (e) {
+      return -1;
+    }
   }
 }
