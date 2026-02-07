@@ -15,9 +15,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        Provider<VpnService>(
-          create: (_) => VpnService()..initialize(),
-        ),
+        Provider<VpnService>(create: (_) => VpnService()..initialize()),
         ChangeNotifierProvider<VpnProvider>(
           create: (context) => VpnProvider(context.read<VpnService>()),
         ),
@@ -27,8 +25,8 @@ class MyApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           colorScheme: ColorScheme.fromSeed(
-            seedColor: Colors.deepPurple, 
-            brightness: Brightness.dark
+            seedColor: Colors.deepPurple,
+            brightness: Brightness.dark,
           ),
           useMaterial3: true,
         ),

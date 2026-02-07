@@ -26,14 +26,15 @@ class XrayConfigConverter {
     final port = uri.port;
     final query = uri.queryParameters;
     
-    String security = query['security'] ?? 'tls';
-    if (security.isEmpty) security = 'tls';
+    String security = query['security'] ?? 'none';
+    if (security.isEmpty) security = 'none';
     final hostHeader = query['host'] ?? '';
     final sni = query['sni'] ?? '';
 
     final streamSettings = {
       "network": query['type'] ?? 'tcp',
-      "security": security,
+      if (security != 'none')
+        "security": security,
       if (security == 'tls')
         "tlsSettings": {
           "serverName": (sni.isNotEmpty ? sni : (hostHeader.isNotEmpty ? hostHeader : address)),
@@ -74,7 +75,35 @@ class XrayConfigConverter {
         },
       if (query['type'] == 'grpc')
         "grpcSettings": {
-          "serviceName": query['serviceName'] ?? ''
+          "serviceName": query['serviceName'] ?? '',
+          "multiMode": true,
+          "authority": query['authority'] ?? (sni.isNotEmpty ? sni : (hostHeader.isNotEmpty ? hostHeader : address))
+        },
+      if (query['type'] == 'h2')
+        "httpSettings": {
+          "path": query['path'] ?? '/',
+          "host": [query['host'] ?? address]
+        },
+      if (query['type'] == 'quic')
+        "quicSettings": {
+          "security": query['quicSecurity'] ?? 'none',
+          "key": query['key'] ?? '',
+          "header": {
+            "type": query['headerType'] ?? 'none'
+          }
+        },
+      if (query['type'] == 'kcp')
+        "kcpSettings": {
+          "mtu": 1350,
+          "tti": 10,
+          "uplinkCapacity": 5,
+          "downlinkCapacity": 20,
+          "congestion": false,
+          "readBufferSize": 1,
+          "writeBufferSize": 1,
+          "header": {
+            "type": query['headerType'] ?? 'none'
+          }
         }
     };
 
@@ -108,6 +137,16 @@ class XrayConfigConverter {
         "wsSettings": {
           "path": data['path'] ?? '/',
           "headers": {"Host": data['host'] ?? ''}
+        },
+      if (data['net'] == 'grpc')
+        "grpcSettings": {
+          "serviceName": data['path'] ?? '',
+          "multiMode": true
+        },
+      if (data['net'] == 'h2')
+        "httpSettings": {
+          "path": data['path'] ?? '/',
+          "host": [data['host'] ?? data['add']]
         }
     };
 
@@ -131,8 +170,8 @@ class XrayConfigConverter {
     final port = uri.port;
     final query = uri.queryParameters;
     
-    String security = query['security'] ?? 'tls';
-    if (security.isEmpty) security = 'tls';
+    String security = query['security'] ?? 'none';
+    if (security.isEmpty) security = 'none';
 
     final streamSettings = {
       "network": query['type'] ?? 'tcp',
@@ -150,6 +189,29 @@ class XrayConfigConverter {
           "spiderX": query['spx'] ?? '/',
           "serverName": query['sni'] ?? address,
           "fingerprint": query['fp'] ?? 'chrome'
+        },
+      if (query['type'] == 'ws')
+        "wsSettings": {
+          "path": query['path'] ?? '/',
+          "headers": {"Host": query['host'] ?? address}
+        },
+      if (query['type'] == 'grpc')
+        "grpcSettings": {
+          "serviceName": query['serviceName'] ?? '',
+          "multiMode": true
+        },
+      if (query['type'] == 'h2')
+        "httpSettings": {
+          "path": query['path'] ?? '/',
+          "host": [query['host'] ?? address]
+        },
+      if (query['type'] == 'quic')
+        "quicSettings": {
+          "security": query['quicSecurity'] ?? 'none',
+          "key": query['key'] ?? '',
+          "header": {
+            "type": query['headerType'] ?? 'none'
+          }
         }
     };
 
@@ -167,17 +229,6 @@ class XrayConfigConverter {
       "dns": {
         "servers": [
           "fakedns",
-          "8.8.8.8",
-          "1.1.1.1",
-          {
-            "address": "https://dns.google/dns-query",
-            "domains": [
-              "geosite:google",
-              "geosite:github",
-              "geosite:telegram",
-              "geosite:geolocation-!cn"
-            ]
-          },
           "localhost"
         ],
         "queryStrategy": "UseIP"
@@ -207,12 +258,13 @@ class XrayConfigConverter {
           "protocol": "tun",
           "settings": {
             "address": ["172.19.0.1/30"],
-            "mtu": 1400,
+            "mtu": 1500,
             "stack": "gvisor"
           },
           "sniffing": {
             "enabled": true,
-            "destOverride": ["http", "tls", "quic", "fakedns"]
+            "destOverride": ["http", "tls", "quic", "fakedns"],
+            "routeOnly": true
           }
         }
       ],
