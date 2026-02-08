@@ -52,6 +52,24 @@ class MainActivity: FlutterActivity() {
                     startService(intent)
                     result.success(true)
                 }
+                "getConnectedServerDelay" -> {
+                    Thread {
+                        // Real Delay: latency of a request through the tunnel to a reliable host
+                        val delay = checkDelay("8.8.8.8", 443) 
+                        runOnUiThread { result.success(delay) }
+                    }.start()
+                }
+                "getServerDelay" -> {
+                    val config = call.argument<String>("config")
+                    if (config != null) {
+                        Thread {
+                            val delay = checkDelayForConfig(config)
+                            runOnUiThread { result.success(delay) }
+                        }.start()
+                    } else {
+                        result.error("INVALID_CONFIG", "Config is null", null)
+                    }
+                }
                 else -> result.notImplemented()
             }
         }
@@ -87,6 +105,32 @@ class MainActivity: FlutterActivity() {
             startForegroundService(intent)
         } else {
             startService(intent)
+        }
+    }
+
+    private fun checkDelay(host: String, port: Int): Int {
+        return try {
+            val stopwatch = System.currentTimeMillis()
+            val socket = java.net.Socket()
+            socket.connect(java.net.InetSocketAddress(host, port), 3000)
+            socket.close()
+            (System.currentTimeMillis() - stopwatch).toInt()
+        } catch (e: Exception) {
+            -1
+        }
+    }
+
+    private fun checkDelayForConfig(configLink: String): Int {
+        return try {
+            // Very basic parsing for host and port from links like vless://... or vmess://...
+            // This is a fallback to avoid complex native logic for simple ping
+            val uri = java.net.URI(configLink.replace("vmess://", "http://").replace("vless://", "http://").replace("trojan://", "http://").replace("ss://", "http://"))
+            val host = uri.host
+            var port = uri.port
+            if (port == -1) port = 443
+            checkDelay(host, port)
+        } catch (e: Exception) {
+            -1
         }
     }
 

@@ -10,25 +10,25 @@ class VpnProvider extends ChangeNotifier {
   V2RayStatus _status = V2RayStatus.disconnected();
   VpnConfig? _selectedConfig;
   Timer? _delayTimer;
+  int? _lastSuccessfulDelay;
   
   VpnProvider(this._vpnService) {
     _vpnService.statusStream.listen((status) {
+      // Preserve last successful delay if the new status doesn't have one
+      if (status.delay != null && status.delay! > 0) {
+        _lastSuccessfulDelay = status.delay;
+      }
+      
       _status = status;
       notifyListeners();
     });
     
     // Periodically update real delay if connected
-    _delayTimer = Timer.periodic(const Duration(seconds: 10), (timer) async {
+    _delayTimer = Timer.periodic(const Duration(seconds: 5), (timer) async {
       if (isConnected) {
         final delay = await _vpnService.getConnectedServerDelay();
         if (delay > 0) {
-          _status = V2RayStatus(
-            duration: _status.duration,
-            uploadSpeed: _status.uploadSpeed,
-            downloadSpeed: _status.downloadSpeed,
-            state: _status.state,
-            delay: delay,
-          );
+          _lastSuccessfulDelay = delay;
           notifyListeners();
         }
       }
@@ -43,7 +43,9 @@ class VpnProvider extends ChangeNotifier {
 
   V2RayStatus get status => _status;
   bool get isConnected => _status.state == 'CONNECTED';
+  bool get isConnecting => _status.state == 'CONNECTING';
   VpnConfig? get selectedConfig => _selectedConfig;
+  int? get lastSuccessfulDelay => _lastSuccessfulDelay;
 
   void updateSelectedConfig(VpnConfig? config) {
     _selectedConfig = config;
@@ -52,11 +54,13 @@ class VpnProvider extends ChangeNotifier {
 
   Future<void> initialize() => _vpnService.initialize();
 
-  Future<void> toggleConnection() async {
+  Future<void> toggleConnection(VpnConfig? config) async {
     if (isConnected) {
       await disconnect();
     } else {
-      if (_selectedConfig != null) {
+      if (config != null) {
+        _selectedConfig = config;
+        notifyListeners();
         await connect();
       }
     }
@@ -64,6 +68,8 @@ class VpnProvider extends ChangeNotifier {
 
   Future<void> connect() async {
     if (_selectedConfig == null) return;
+    _lastSuccessfulDelay = null; // Reset ping for new connection
+    notifyListeners();
     try {
       await _vpnService.startVpn(_selectedConfig!);
     } catch (e) {

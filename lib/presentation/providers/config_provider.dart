@@ -14,6 +14,7 @@ class ConfigProvider with ChangeNotifier {
   final VpnService? _vpnService;
   late Box<VpnConfig> _configBox;
   late Box<VpnGroup> _groupBox;
+  late Box _settingsBox;
   
   List<VpnGroup> _groups = [];
   List<VpnConfig> _configs = [];
@@ -164,6 +165,7 @@ class ConfigProvider with ChangeNotifier {
       // 3. Auto-select best config if found
       if (bestConfig != null) {
         _selectedConfigId = bestConfig.id;
+        await _settingsBox.put('last_config_id', bestConfig.id);
         debugPrint('Best config selected: ${bestConfig.name} with score $maxScore');
       }
 
@@ -251,6 +253,7 @@ class ConfigProvider with ChangeNotifier {
   Future<void> _init() async {
     _configBox = await Hive.openBox<VpnConfig>('vpn_configs');
     _groupBox = await Hive.openBox<VpnGroup>('vpn_groups');
+    _settingsBox = await Hive.openBox('settings');
     
     // Create default group if none exists
     if (_groupBox.isEmpty) {
@@ -262,19 +265,35 @@ class ConfigProvider with ChangeNotifier {
       await _groupBox.put(defaultGroup.id, defaultGroup);
     }
 
-    _loadData();
+    _loadData(isInitial: true);
   }
 
-  void _loadData() {
+  void _loadData({bool isInitial = false}) {
     _groups = _groupBox.values.toList();
     _configs = _configBox.values.toList();
     
-    if (_configs.isNotEmpty && _selectedConfigId == null) {
-      _selectedConfigId = _configs.first.id;
+    if (isInitial) {
+      _selectedConfigId = _settingsBox.get('last_config_id');
+      _selectedGroupId = _settingsBox.get('last_group_id');
+    }
+
+    // Validate and set defaults if selection is invalid or missing
+    if (_groups.isNotEmpty) {
+      if (_selectedGroupId == null || !_groups.any((g) => g.id == _selectedGroupId)) {
+        _selectedGroupId = _groups.first.id;
+      }
     }
     
-    if (_groups.isNotEmpty && _selectedGroupId == null) {
-      _selectedGroupId = _groups.first.id;
+    if (_configs.isNotEmpty) {
+      if (_selectedConfigId == null || !_configs.any((c) => c.id == _selectedConfigId)) {
+        // Try to pick first config from selected group
+        final groupConfigs = getConfigsByGroup(_selectedGroupId ?? 'default');
+        if (groupConfigs.isNotEmpty) {
+          _selectedConfigId = groupConfigs.first.id;
+        } else {
+          _selectedConfigId = _configs.first.id;
+        }
+      }
     }
     
     notifyListeners();
@@ -282,11 +301,14 @@ class ConfigProvider with ChangeNotifier {
 
   Future<void> selectConfig(String id) async {
     _selectedConfigId = id;
+    await _settingsBox.put('last_config_id', id);
     notifyListeners();
   }
 
   Future<void> selectGroup(String id) async {
     _selectedGroupId = id;
+    await _settingsBox.put('last_group_id', id);
+    _loadData(); // Refresh selection logic for configs in this group
     notifyListeners();
   }
 
@@ -336,7 +358,10 @@ class ConfigProvider with ChangeNotifier {
       await _configBox.put(updated.id, updated);
     }
     
-    if (_selectedGroupId == id) _selectedGroupId = 'default';
+    if (_selectedGroupId == id) {
+      _selectedGroupId = 'default';
+      await _settingsBox.put('last_group_id', 'default');
+    }
     _loadData();
   }
 
@@ -425,6 +450,7 @@ class ConfigProvider with ChangeNotifier {
       await _configBox.put(config.id, config);
       if (groupId == _selectedGroupId) {
          _selectedConfigId = config.id;
+         await _settingsBox.put('last_config_id', config.id);
       }
       return true;
     } catch (e) {
@@ -437,6 +463,11 @@ class ConfigProvider with ChangeNotifier {
     await _configBox.delete(id);
     if (_selectedConfigId == id) {
       _selectedConfigId = _configs.isNotEmpty ? _configs.first.id : null;
+      if (_selectedConfigId != null) {
+        await _settingsBox.put('last_config_id', _selectedConfigId);
+      } else {
+        await _settingsBox.delete('last_config_id');
+      }
     }
     _loadData();
   }

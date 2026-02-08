@@ -36,6 +36,10 @@ class VpnService : AndroidVpnService() {
     private var statusTimer: Timer? = null
     private var startTime: Long = 0
     private var tunFdInt: Int = -1
+    private var lastRxBytes: Long = 0
+    private var lastTxBytes: Long = 0
+    private var zeroCountDown = 0
+    private var zeroCountUp = 0
     private var hevLogThread: Thread? = null
     @Volatile private var hevLogRunning: Boolean = false
 
@@ -132,6 +136,8 @@ class VpnService : AndroidVpnService() {
             }
 
             startTime = System.currentTimeMillis()
+            lastRxBytes = android.net.TrafficStats.getTotalRxBytes()
+            lastTxBytes = android.net.TrafficStats.getTotalTxBytes()
             startStatusUpdates()
             showNotification("Ananas VPN", "Connected")
         } catch (e: Exception) {
@@ -508,6 +514,37 @@ misc:
         statusTimer?.scheduleAtFixedRate(object : TimerTask() {
             override fun run() {
                 if (!isRunning) return
+                
+                val currentRx = android.net.TrafficStats.getTotalRxBytes()
+                val currentTx = android.net.TrafficStats.getTotalTxBytes()
+                
+                var downSpeed = if (lastRxBytes > 0) (currentRx - lastRxBytes).toInt() else 0
+                var upSpeed = if (lastTxBytes > 0) (currentTx - lastTxBytes).toInt() else 0
+                
+                // Smoothing/Debouncing zeroes: 
+                // Some Android versions don't update TrafficStats every second.
+                // If we get a 0, we check if it persists.
+                if (downSpeed == 0 && lastRxBytes > 0) {
+                    zeroCountDown++
+                    if (zeroCountDown < 2) { // Skip first zero
+                        return // Don't update yet, wait for next tick
+                    }
+                } else {
+                    zeroCountDown = 0
+                }
+
+                if (upSpeed == 0 && lastTxBytes > 0) {
+                    zeroCountUp++
+                    if (zeroCountUp < 2) {
+                        return 
+                    }
+                } else {
+                    zeroCountUp = 0
+                }
+                
+                lastRxBytes = currentRx
+                lastTxBytes = currentTx
+
                 val durationMs = System.currentTimeMillis() - startTime
                 val durationStr = String.format(
                     "%02d:%02d:%02d",
@@ -515,7 +552,7 @@ misc:
                     (durationMs % 3600000) / 60000,
                     (durationMs % 60000) / 1000
                 )
-                updateStatus("CONNECTED", 0, 0, durationStr)
+                updateStatus("CONNECTED", upSpeed, downSpeed, durationStr)
             }
         }, 0, 1000)
     }

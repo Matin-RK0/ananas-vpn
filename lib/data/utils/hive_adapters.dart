@@ -1,4 +1,4 @@
-import 'package:ananas/domain/models/vpn_config.dart';
+import 'package:ananas_vpn/domain/models/vpn_config.dart';
 import 'package:hive/hive.dart';
 
 class VpnConfigAdapter extends TypeAdapter<VpnConfig> {
